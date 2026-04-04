@@ -1,58 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:layout_height="match_parent">
 
-    <EditText
-        android:id="@+id/peerIp"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Peer IPv6" />
+        android:orientation="vertical"
+        android:padding="12dp">
 
-    <EditText
-        android:id="@+id/peerPort"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Port (5299)"
-        android:inputType="number" />
-
-    <Button
-        android:id="@+id/listenButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Start Listening" />
-
-    <Button
-        android:id="@+id/connectButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Connect" />
-
-    <EditText
-        android:id="@+id/messageInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Type message" />
-
-    <Button
-        android:id="@+id/sendButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Send" />
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <TextView
-            android:id="@+id/chatLog"
+        <EditText
+            android:id="@+id/localIdInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Chat log..."
-            android:textSize="16sp" />
-    </ScrollView>
+            android:hint="Your ID (e.g. android@barev)"
+            android:text="android@barev" />
 
-</LinearLayout>
+        <EditText
+            android:id="@+id/peerIdInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Peer ID (e.g. pc@barev)"
+            android:text="pc@barev" />
+
+        <EditText
+            android:id="@+id/statusInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Status"
+            android:text="online" />
+
+        <EditText
+            android:id="@+id/peerIp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Peer IP / IPv6 / Yggdrasil address" />
+
+        <EditText
+            android:id="@+id/peerPort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Port"
+            android:inputType="number"
+            android:text="5299" />
+
+        <Button
+            android:id="@+id/connectButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connect" />
+
+        <Button
+            android:id="@+id/listenButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Start Listening" />
+
+        <Button
+            android:id="@+id/disconnectButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Disconnect" />
+
+        <EditText
+            android:id="@+id/messageInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Message" />
+
+        <Button
+            android:id="@+id/sendButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Send Message" />
+
+        <Button
+            android:id="@+id/presenceButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Send Presence" />
+
+        <TextView
+            android:id="@+id/logView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="12dp"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+</ScrollView>
