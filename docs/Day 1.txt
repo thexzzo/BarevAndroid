@@ -1,0 +1,9 @@
+Day 1 progress:
+- Created BarevMessenger Android project
+- Switched from Compose to XML UI
+- Added INTERNET permission
+- Fixed theme/AppCompat issue
+- Implemented socket client and server listener
+- App runs in emulator
+- Start Listening button works
+- Next step: real phone + Yggdrasil setup
