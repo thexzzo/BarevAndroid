@@ -1,82 +1,149 @@
-# Barev Messenger (Capstone Project)
+📡 Barev Android Messenger
+📌 Overview
 
-## 📌 Overview
+This project implements a serverless peer-to-peer messaging application for Android, inspired by the Barev protocol. Unlike traditional messaging systems, this application does not rely on centralized servers. Instead, it establishes direct TCP connections between peers and exchanges structured XML-based messages (stanzas).
 
-This project is a **serverless peer-to-peer messaging application** built for Android. It implements a lightweight version of the **Barev protocol**, which is inspired by **XMPP**, and operates over direct peer-to-peer connections without centralized servers.
+The goal of this project is to recreate the core functionality of Barev in a standalone Android application, demonstrating decentralized communication principles and protocol design.
 
-The application uses **TCP sockets** for communication and is designed to run over the **Yggdrasil overlay network**, enabling secure and decentralized messaging using IPv6 addressing.
+🧠 Implemented Features (Current Stage)
 
----
+The application currently supports the following:
 
-## 🚀 Features Implemented
+✅ Core Communication
+Direct peer-to-peer TCP connection
+Client (connect) and server (listen) modes
+Communication over configurable IP and port (default: 5299)
+✅ Protocol (Barev-style Stanzas)
 
-### ✅ Core Networking
-- Direct peer-to-peer TCP connection
-- Two-way communication between devices
-- No central server required
+The system exchanges structured XML stanzas similar to XMPP:
 
-### ✅ XMPP-style Protocol (Barev-inspired)
-- Stream initialization (`<stream:stream>`)
-- Message stanzas (`<message>`)
-- Presence stanzas (`<presence>`)
-- Basic stanza parsing
+<stream> → session initialization
+<message> → chat messages
+<presence> → status updates
+<ping/> / <pong/> → keepalive
+<composing/> / <paused/> → typing notifications
+✅ Messaging
+Send and receive text messages
+Proper XML escaping/unescaping
+Structured message format:
+<message from="android@barev" to="pc@barev" type="chat">
+  <body>Hello</body>
+</message>
+✅ Presence / Status
+Online status
+Custom status messages
+Offline notification (type="unavailable")
+✅ Typing Indicators
+Shows when peer is typing
+Shows when typing stops
+✅ Connection Management
+Smart ping system:
+Only sends ping when idle
+Waits for pong
+Disconnects if no response
+🏗️ Architecture
 
-### ✅ Messaging
-- Send and receive messages
-- XML-based structured communication
+The system follows a simple peer-to-peer model:
 
-### ✅ Presence System
-- Online (`<presence/>`)
-- Offline (`<presence type="unavailable"/>`)
+Phone A (listener)  ←→  Phone B (connector)
+         OR
+Android App         ←→  Python Test Server
 
-### ✅ Chat State Notifications (XEP-0085)
-- Typing indicator (`<composing/>`)
-- Paused typing (`<paused/>`)
+Each peer:
 
-### ✅ Protocol Abstraction
-- `BarevProtocol.kt` handles:
-  - stanza creation
-  - stanza parsing
-- `MainActivity.kt` handles:
-  - UI
-  - connection lifecycle
+Opens a socket
+Exchanges XML stanzas
+Maintains connection state
+Handles incoming messages asynchronously
+🧪 Current Testing Setup
 
----
+At this stage, the system is tested using:
 
-## 🔧 Technologies Used
+1. Android ↔ PC (Python Server)
 
-- Kotlin (Android)
-- TCP Sockets
-- XML (XMPP-style stanzas)
-- Yggdrasil Network (planned integration)
+A Python-based peer (chat_server.py) is used to:
 
----
+simulate another Barev client
+validate protocol behavior
+debug communication
+2. Same Wi-Fi Network
+Both devices must be on the same LAN
+One acts as listener, the other connects
+🚀 How to Run the Project
+🔹 Step 1 — Run Python Server (PC)
+python chat_server.py
 
-## 🧪 Testing Tools
+Expected output:
 
-- Python TCP server used for testing:
-  - sending/receiving XML stanzas
-  - simulating peer behavior
+Listening on 0.0.0.0:5299
+Waiting for Android phone to connect...
+🔹 Step 2 — Run Android App
+Open app
+Fill in:
+Peer IP → your PC IP (e.g. 192.168.x.x)
+Port → 5299
+Press Connect
+🔹 Step 3 — Test Communication
 
----
+On Android:
 
-## 📈 Next Steps
+Send message
+Send presence
 
-- Yggdrasil integration (real IPv6 peer-to-peer)
-- XMPP Ping (XEP-0199)
-- Advanced presence states (away, dnd)
-- File transfer (inspired by XEP-0095 / XEP-0096)
-- UI improvements
+On PC:
 
----
+You: hello
 
-## 🎯 Goal
+Try commands:
 
-To implement a **fully decentralized messaging system** based on Barev and XMPP principles, demonstrating peer-to-peer communication without centralized infrastructure.
+/stream
+/presence online
+/typing
+/paused
+📱 Phone-to-Phone (Current Capability)
 
----
+The app can already support phone-to-phone communication:
 
-## 👤 Author
+Requirements:
+Both phones on same Wi-Fi
+One phone taps Start Listening
+Other phone connects using IP + port
+⚠️ Limitations (Current Stage)
+No persistent contacts list
+No message history storage
+UI is minimal (log-based)
+No file transfer yet
+Not yet integrated with Yggdrasil network
+🔮 Next Steps
+🔹 Phase 1 (Immediate)
+Display device IP automatically
+Improve UI for chat display
+Stabilize phone-to-phone testing
+🔹 Phase 2 (Core Capstone Upgrade)
+Integrate Yggdrasil for real P2P networking
+Use Yggdrasil IPv6 addresses instead of LAN IPs
+🔹 Phase 3 (Advanced Features)
+File transfer support
+Peer discovery
+Contact management
+📚 References
+Barev protocol description
+barev-purple (Pidgin plugin)
+barev-pascal implementation
+XMPP-inspired messaging model
+🎯 Project Goal
 
-Reza  
-Capstone Project – 2026
+To demonstrate that:
+
+A fully functional messaging system can operate without centralized infrastructure using peer-to-peer communication and structured protocol design.
+
+🧠 Notes for Implementation
+
+At this stage, the system is:
+
+✔ Functionally complete as a prototype
+✔ Already demonstrates real-time P2P messaging
+✔ Suitable for extension into a full Barev-compatible client
+
+The focus going forward is not “making it work” —
+but making it correct, scalable, and protocol-aligned.
