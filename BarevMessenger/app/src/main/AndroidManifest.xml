@@ -13,6 +13,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BarevMessenger">
 
+        <activity android:name=".ChatActivity" />
+
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
