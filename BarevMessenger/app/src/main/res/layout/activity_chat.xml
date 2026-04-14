@@ -6,14 +6,30 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <TextView
-        android:id="@+id/titleBar"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:paddingBottom="8dp"
-        android:text="Chat" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:id="@+id/peerStatusDot"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/status_offline" />
+
+        <TextView
+            android:id="@+id/titleBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="Chat" />
+
+    </LinearLayout>
 
     <Button
         android:id="@+id/connectButton"
@@ -21,24 +37,26 @@
         android:layout_height="wrap_content"
         android:text="Connect" />
 
-    <Spinner
-        android:id="@+id/statusSpinner"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp" />
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
 
-    <EditText
-        android:id="@+id/statusInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Status message (optional)"
-        android:inputType="text" />
+        <Spinner
+            android:id="@+id/statusSpinner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
 
-    <Button
-        android:id="@+id/presenceButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Send Presence" />
+        <Button
+            android:id="@+id/presenceButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Send Presence"
+            android:visibility="gone" />
+
+    </LinearLayout>
 
     <ScrollView
         android:id="@+id/scrollView"
@@ -70,5 +88,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Send" />
+
+    <EditText
+        android:id="@+id/statusInput"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
 
 </LinearLayout>

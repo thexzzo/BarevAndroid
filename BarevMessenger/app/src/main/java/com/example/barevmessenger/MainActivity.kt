@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
         localIdInput = findViewById(R.id.localIdInput)
         addButton    = findViewById(R.id.addButton)
 
-        localIdInput.setText("Reza@202:4eda:5f1f:b7ec:fc5a:b79e:588c:31b9")
+        localIdInput.setText("")
 
         contacts = ContactManager.load(this)
         adapter  = ArrayAdapter(this, android.R.layout.simple_list_item_1, displayList())
