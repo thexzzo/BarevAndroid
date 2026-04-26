@@ -1,6 +1,6 @@
 package com.example.barevmessenger
 
-enum class PresenceStatus { AVAILABLE, AWAY, XA, DND, OFFLINE }
+enum class PresenceStatus { AVAILABLE, AWAY, DND, OFFLINE }
 
 object BarevProtocol {
 
@@ -25,7 +25,6 @@ object BarevProtocol {
         else -> {
             val showVal = when (status) {
                 PresenceStatus.AWAY -> "away"
-                PresenceStatus.XA   -> "xa"
                 PresenceStatus.DND  -> "dnd"
                 else -> "away"
             }
@@ -37,6 +36,16 @@ object BarevProtocol {
 
     fun makeChatMessage(to: String, body: String): String =
         "<message to=\"$to\" type=\"chat\"><body>${escape(body)}</body></message>"
+
+    fun makeComposing(from: String, to: String): String =
+        "<message from=\"$from\" to=\"$to\" type=\"chat\">" +
+                "<composing xmlns=\"http://jabber.org/protocol/chatstates\"/>" +
+                "</message>"
+
+    fun makePaused(from: String, to: String): String =
+        "<message from=\"$from\" to=\"$to\" type=\"chat\">" +
+                "<paused xmlns=\"http://jabber.org/protocol/chatstates\"/>" +
+                "</message>"
 
     fun makePing(from: String, to: String, id: String): String =
         "<iq type=\"get\" id=\"$id\" from=\"$from\" to=\"$to\">" +
@@ -75,7 +84,7 @@ object BarevProtocol {
         "<iq type=\"error\" id=\"si_$sid\" to=\"$to\" from=\"$from\">" +
                 "<error code=\"403\" type=\"auth\">" +
                 "<forbidden xmlns=\"urn:ietf:params:xml:ns:xmpp-stanzas\"/>" +
-                "</error></iq>"
+                "</e></iq>"
 
     fun makeStreamhostProposal(
         from: String, to: String,
@@ -105,11 +114,11 @@ object BarevProtocol {
                 ParsedStanza.PresenceOffline
 
             t.startsWith("<presence") -> {
-                val show = extractTagValue(t, "show") ?: ""
+                val show       = extractTagValue(t, "show") ?: ""
                 val statusText = unescape(extractTagValue(t, "status") ?: "")
                 val status = when (show) {
                     "away" -> PresenceStatus.AWAY
-                    "xa"   -> PresenceStatus.XA
+                    "xa"   -> PresenceStatus.AWAY
                     "dnd"  -> PresenceStatus.DND
                     else   -> PresenceStatus.AVAILABLE
                 }
@@ -121,6 +130,24 @@ object BarevProtocol {
                 val body = unescape(extractTagValue(t, "body") ?: "")
                 ParsedStanza.Message(from, body)
             }
+
+            t.startsWith("<message") && t.contains("<composing") ->
+                ParsedStanza.Typing(extractAttr(t, "from"))
+
+            t.startsWith("<message") && t.contains("<paused") ->
+                ParsedStanza.Paused(extractAttr(t, "from"))
+
+            t.startsWith("<message") && t.contains("<active") ->
+                ParsedStanza.Raw(t)
+
+            t.startsWith("<message") ->
+                ParsedStanza.Raw(t)
+
+            t.contains("<composing") ->
+                ParsedStanza.Typing(extractAttr(t, "from"))
+
+            t.contains("<paused") ->
+                ParsedStanza.Paused(extractAttr(t, "from"))
 
             t.startsWith("<iq") && t.contains("<ping") -> {
                 val id   = extractAttr(t, "id")
@@ -154,7 +181,7 @@ object BarevProtocol {
             }
 
             t.startsWith("<iq") && t.contains("streamhost-used") -> {
-                val sid    = extractAttr(t, "sid")
+                val sid     = extractAttr(t, "sid")
                 val usedJid = extractAttr(t, "jid")
                 ParsedStanza.StreamhostSelected(sid, usedJid)
             }
@@ -212,6 +239,8 @@ sealed class ParsedStanza {
     data class  PresenceUpdate(val status: PresenceStatus, val statusText: String)   : ParsedStanza()
     data object PresenceOffline                                                        : ParsedStanza()
     data class  Message(val from: String, val body: String)                           : ParsedStanza()
+    data class  Typing(val from: String)                                              : ParsedStanza()
+    data class  Paused(val from: String)                                              : ParsedStanza()
     data class  Ping(val id: String, val from: String)                                : ParsedStanza()
     data class  Pong(val id: String)                                                  : ParsedStanza()
     data class  FileOffer(val from: String, val sid: String,
