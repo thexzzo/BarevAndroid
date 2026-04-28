@@ -25,3 +25,6 @@ forth patch:
 - .apk file available for download! (https://github.com/thexzzo/BarevAndroid/releases/download/v1.0/Barev.apk
 )
 
+fifth patch:
+- Brought the 'Connect' button back for each chat in order to resolve the unstable connection
+

@@ -125,7 +125,6 @@ class BarevService : Service() {
             try {
                 globalServerSocket = ServerSocket(port)
                 debugLog("Listener started on port $port")
-                connections.values.forEach { connectToBuddy(it.nick) }
                 while (true) {
                     try {
                         val s = globalServerSocket?.accept() ?: break
@@ -210,30 +209,23 @@ class BarevService : Service() {
         val conn = connections[nick] ?: return
         if (conn.isConnected) return
         thread {
-            while (!conn.isConnected) {
-                try {
-                    debugLog("Trying to connect to ${conn.peerId} at ${conn.ipv6}:${conn.port}")
-                    val s = Socket()
-                    s.connect(java.net.InetSocketAddress(conn.ipv6, conn.port), 3000)
-                    if (conn.isConnected) {
-                        try { s.close() } catch (_: Exception) {}
-                        return@thread
-                    }
-                    conn.socket            = s
-                    conn.writer            = BufferedWriter(OutputStreamWriter(s.getOutputStream(), "UTF-8"))
-                    conn.reader            = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
-                    conn.isConnected       = true
-                    conn.isInitiator       = true
-                    conn.streamEstablished = false
-                    conn.lastActivityTime  = System.currentTimeMillis()
-                    listener?.onConnectionStateChanged(nick)
-                    sendStreamStart(conn)
-                    startReadLoop(conn, StringBuilder())
-                    return@thread
-                } catch (e: Exception) {
-                    debugLog("Connect to $nick failed: ${e.message} — retrying in 3s")
-                }
-                Thread.sleep(3_000)
+            try {
+                debugLog("Connecting to ${conn.peerId} at ${conn.ipv6}:${conn.port}")
+                val s = Socket()
+                s.connect(java.net.InetSocketAddress(conn.ipv6, conn.port), 3000)
+                conn.socket            = s
+                conn.writer            = BufferedWriter(OutputStreamWriter(s.getOutputStream(), "UTF-8"))
+                conn.reader            = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
+                conn.isConnected       = true
+                conn.isInitiator       = true
+                conn.streamEstablished = false
+                conn.lastActivityTime  = System.currentTimeMillis()
+                listener?.onConnectionStateChanged(nick)
+                sendStreamStart(conn)
+                startReadLoop(conn, StringBuilder())
+            } catch (e: Exception) {
+                debugLog("Connect to $nick failed: ${e.message}")
+                listener?.onConnectionStateChanged(nick)
             }
         }
     }
@@ -261,10 +253,6 @@ class BarevService : Service() {
         val key = "${conn.nick}@${conn.ipv6}"
         listener?.onConnectionStateChanged(key)
         listener?.onStatusChanged(key)
-        thread {
-            Thread.sleep(3_000)
-            connectToBuddy(key)
-        }
     }
 
     private fun startReadLoop(conn: BuddyConnection, initialBuffer: StringBuilder) {
@@ -475,7 +463,6 @@ class BarevService : Service() {
                 port     = contact.port,
                 messages = messages
             )
-            connectToBuddy(key)
         }
     }
 

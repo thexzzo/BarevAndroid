@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     private lateinit var buddyListView:  ListView
     private lateinit var accountButton:  Button
     private lateinit var addButton:      Button
+    private lateinit var connectButton:  Button
     private lateinit var chatView:       TextView
     private lateinit var messageInput:   EditText
     private lateinit var sendButton:     Button
@@ -78,9 +79,10 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        buddyListView  = findViewById(R.id.buddyList)
-        accountButton  = findViewById(R.id.accountButton)
-        addButton      = findViewById(R.id.addButton)
+        buddyListView     = findViewById(R.id.buddyList)
+        accountButton     = findViewById(R.id.accountButton)
+        addButton         = findViewById(R.id.addButton)
+        connectButton     = findViewById(R.id.connectButton)
         chatView       = findViewById(R.id.chatView)
         messageInput   = findViewById(R.id.messageInput)
         sendButton     = findViewById(R.id.sendButton)
@@ -100,9 +102,10 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         setupBuddyAdapter()
         setupStatusSpinner()
 
-        accountButton.setOnClickListener { showAccountDialog() }
-        addButton.setOnClickListener     { showAddBuddyDialog() }
-        sendButton.setOnClickListener    { sendMessage() }
+        accountButton.setOnClickListener    { showAccountDialog() }
+        addButton.setOnClickListener        { showAddBuddyDialog() }
+        sendButton.setOnClickListener       { sendMessage() }
+        connectButton.setOnClickListener    { connectSelected() }
         togglePanelButton.setOnClickListener { toggleBuddyPanel() }
 
         showNoChatSelected()
@@ -240,9 +243,9 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         sendButton.visibility    = View.VISIBLE
         statusSpinner.visibility = View.VISIBLE
         peerStatusDot.visibility = View.VISIBLE
-
         val conn = service?.connections?.get(key)
         updatePeerStatusDot(conn?.status ?: PresenceStatus.OFFLINE)
+        updateConnectButton(conn?.isConnected == true)
         refreshChatView(key)
         buddyAdapter.notifyDataSetChanged()
     }
@@ -265,6 +268,17 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         togglePanelButton.setImageResource(
             if (isPanelVisible) R.drawable.ic_arrow_left else R.drawable.ic_arrow_right
         )
+    }
+
+    private fun updateConnectButton(connected: Boolean) {
+        runOnUiThread {
+            connectButton.visibility = if (connected) View.GONE else View.VISIBLE
+        }
+    }
+
+    private fun connectSelected() {
+        val key = selectedNick ?: return
+        service?.connectToBuddy(key)
     }
 
     private fun sendMessage() {
@@ -357,11 +371,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         runOnUiThread { peerStatusDot.setImageResource(statusDrawable(status)) }
     }
 
-    private fun updateConnectButton(connected: Boolean) {
-        runOnUiThread {
-        }
-    }
-
     private fun showAddBuddyDialog() {
         val view = layoutInflater.inflate(R.layout.dialog_add_buddy, null)
         val nick = view.findViewById<EditText>(R.id.inputNick)
@@ -431,6 +440,8 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     }
 
     override fun onConnectionStateChanged(nick: String) {
+        val conn = service?.connections?.get(nick)
+        if (nick == selectedNick) updateConnectButton(conn?.isConnected == true)
         refreshBuddyList()
     }
 
