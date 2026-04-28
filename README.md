@@ -18,9 +18,10 @@ third patch:
 
 forth patch:
 - UI is now more dark mode friendly
-- Connect button removed (the connection will happen automatically after approximately 20 seconds with any online peer and the app actively tries to connect to any other new peer)
+- Connect button removed (the connection will happen  with any already online peer automatically after approximately 20 seconds of opening the app and the app actively tries to connect to any other new peer while it's running)
 - Issue of presence stanzas not being updated on the client accordingly resolved
 - Logo updated to a modified version of the original Barev Purple
 - Up to 200 chat logs are saved for each peer
-- .apk file available for download!
+- .apk file available for download! (https://github.com/thexzzo/BarevAndroid/releases/download/v1.0/Barev.apk
+)
 
