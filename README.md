@@ -16,6 +16,11 @@ third patch:
 - Added a toggle button which now hides the peer info on the left giving more space to the chat interface
 - Peer name, time of the message and the message itself have their own fields and are no longer set to one line
 
-forth patch (to be released):
-- UI modifications making the interface more dark mode friendly
+forth patch:
+- UI is now more dark mode friendly
+- Connect button removed (the connection will happen automatically after approximately 20 seconds with any online peer and the app actively tries to connect to any other new peer)
+- Issue of presence stanzas not being updated on the client accordingly resolved
+- Logo updated to a modified version of the original Barev Purple
+- Up to 200 chat logs are saved for each peer
+- .apk file available for download!
 

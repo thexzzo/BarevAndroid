@@ -3,6 +3,7 @@ package com.example.barevmessenger
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
@@ -57,7 +58,9 @@ class BarevService : Service() {
 
     val connections = ConcurrentHashMap<String, BuddyConnection>()
     var localId     = ""
+    var currentStatus: PresenceStatus = PresenceStatus.AVAILABLE
     var listener: ServiceListener? = null
+    var appContext: Context? = null
     private var globalServerSocket: ServerSocket? = null
 
     interface ServiceListener {
@@ -69,7 +72,25 @@ class BarevService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        appContext = applicationContext
+        currentStatus = loadStatus()
         startForegroundNotification()
+    }
+
+    private fun loadStatus(): PresenceStatus {
+        val prefs = getSharedPreferences("barev_prefs", Context.MODE_PRIVATE)
+        return when (prefs.getString("status", "AVAILABLE")) {
+            "AWAY" -> PresenceStatus.AWAY
+            "DND"  -> PresenceStatus.DND
+            else   -> PresenceStatus.AVAILABLE
+        }
+    }
+
+    private fun saveStatus(status: PresenceStatus) {
+        getSharedPreferences("barev_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("status", status.name)
+            .apply()
     }
 
     private fun startForegroundNotification() {
@@ -104,10 +125,16 @@ class BarevService : Service() {
             try {
                 globalServerSocket = ServerSocket(port)
                 debugLog("Listener started on port $port")
+                connections.values.forEach { connectToBuddy(it.nick) }
                 while (true) {
-                    val s = globalServerSocket?.accept() ?: break
-                    debugLog("Incoming from ${s.inetAddress.hostAddress}")
-                    handleIncomingSocket(s)
+                    try {
+                        val s = globalServerSocket?.accept() ?: break
+                        debugLog("Incoming from ${s.inetAddress.hostAddress}")
+                        handleIncomingSocket(s)
+                    } catch (e: Exception) {
+                        debugLog("Accept error: ${e.message}")
+                        if (globalServerSocket?.isClosed == true) break
+                    }
                 }
             } catch (e: Exception) {
                 debugLog("Listener stopped: ${e.message}")
@@ -149,6 +176,14 @@ class BarevService : Service() {
                             return@thread
                         }
 
+                        if (conn.isConnected) {
+                            debugLog("Replacing stale connection for ${conn.nick}")
+                            conn.isConnected = false
+                            try { conn.writer?.close() } catch (_: Exception) {}
+                            try { conn.reader?.close() } catch (_: Exception) {}
+                            try { conn.socket?.close() } catch (_: Exception) {}
+                        }
+
                         conn.socket            = s
                         conn.writer            = writer
                         conn.reader            = reader
@@ -156,7 +191,7 @@ class BarevService : Service() {
                         conn.isInitiator       = false
                         conn.streamEstablished = false
                         conn.lastActivityTime  = System.currentTimeMillis()
-                        listener?.onConnectionStateChanged(conn.nick)
+                        listener?.onConnectionStateChanged("${conn.nick}@${conn.ipv6}")
                         processBuffer(conn, sb)
                         startReadLoop(conn, sb)
                         return@thread
@@ -175,23 +210,30 @@ class BarevService : Service() {
         val conn = connections[nick] ?: return
         if (conn.isConnected) return
         thread {
-            try {
-                debugLog("Connecting to ${conn.peerId} at ${conn.ipv6}:${conn.port}")
-                val s = Socket(conn.ipv6, conn.port)
-                conn.socket            = s
-                conn.writer            = BufferedWriter(OutputStreamWriter(s.getOutputStream(), "UTF-8"))
-                conn.reader            = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
-                conn.isConnected       = true
-                conn.isInitiator       = true
-                conn.streamEstablished = false
-                conn.lastActivityTime  = System.currentTimeMillis()
-                listener?.onConnectionStateChanged(nick)
-                sendStreamStart(conn)
-                startReadLoop(conn, StringBuilder())
-            } catch (e: Exception) {
-                debugLog("Connect to $nick failed: ${e.message}")
-                addSystemMessage(nick, "Could not connect: ${e.message}")
-                listener?.onConnectionStateChanged(nick)
+            while (!conn.isConnected) {
+                try {
+                    debugLog("Trying to connect to ${conn.peerId} at ${conn.ipv6}:${conn.port}")
+                    val s = Socket()
+                    s.connect(java.net.InetSocketAddress(conn.ipv6, conn.port), 3000)
+                    if (conn.isConnected) {
+                        try { s.close() } catch (_: Exception) {}
+                        return@thread
+                    }
+                    conn.socket            = s
+                    conn.writer            = BufferedWriter(OutputStreamWriter(s.getOutputStream(), "UTF-8"))
+                    conn.reader            = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
+                    conn.isConnected       = true
+                    conn.isInitiator       = true
+                    conn.streamEstablished = false
+                    conn.lastActivityTime  = System.currentTimeMillis()
+                    listener?.onConnectionStateChanged(nick)
+                    sendStreamStart(conn)
+                    startReadLoop(conn, StringBuilder())
+                    return@thread
+                } catch (e: Exception) {
+                    debugLog("Connect to $nick failed: ${e.message} — retrying in 3s")
+                }
+                Thread.sleep(3_000)
             }
         }
     }
@@ -216,8 +258,13 @@ class BarevService : Service() {
         conn.writer = null
         conn.reader = null
         conn.socket = null
-        listener?.onConnectionStateChanged(conn.nick)
-        listener?.onStatusChanged(conn.nick)
+        val key = "${conn.nick}@${conn.ipv6}"
+        listener?.onConnectionStateChanged(key)
+        listener?.onStatusChanged(key)
+        thread {
+            Thread.sleep(3_000)
+            connectToBuddy(key)
+        }
     }
 
     private fun startReadLoop(conn: BuddyConnection, initialBuffer: StringBuilder) {
@@ -226,35 +273,26 @@ class BarevService : Service() {
             try {
                 val buf = CharArray(1024)
                 while (conn.isConnected) {
-                    val n = conn.reader?.read(buf) ?: break
+                    val n = try {
+                        conn.reader?.read(buf) ?: break
+                    } catch (e: Exception) {
+                        debugLog("Read error [${conn.nick}]: ${e.message}")
+                        break
+                    }
                     if (n == -1) break
                     conn.lastActivityTime = System.currentTimeMillis()
                     val chunk = String(buf, 0, n)
                     debugLog("RAW IN [${conn.nick}]: $chunk")
                     sb.append(chunk)
-                    processBuffer(conn, sb)
+                    try { processBuffer(conn, sb) } catch (e: Exception) {
+                        debugLog("processBuffer error [${conn.nick}]: ${e.message}")
+                    }
                 }
             } catch (e: Exception) {
-                if (conn.isConnected) debugLog("Read error [${conn.nick}]: ${e.message}")
+                debugLog("Read loop crashed [${conn.nick}]: ${e.message}")
             } finally {
-                if (conn.isConnected) {
-                    addSystemMessage(conn.nick, "Connection closed")
-                    cleanupConn(conn)
-                }
-            }
-        }
-
-        thread {
-            while (conn.isConnected) {
-                try {
-                    Thread.sleep(20_000)
-                    if (!conn.isConnected || !conn.streamEstablished) continue
-                    val id = BarevProtocol.pingId()
-                    sendRaw(conn, BarevProtocol.makePing(localId, conn.peerId, id))
-                    debugLog("Keepalive ping sent to ${conn.nick}")
-                } catch (e: Exception) {
-                    break
-                }
+                debugLog("Connection dropped for ${conn.nick}, cleaning up")
+                cleanupConn(conn)
             }
         }
     }
@@ -263,11 +301,13 @@ class BarevService : Service() {
         val text = sb.toString()
         if (text.isBlank()) return
 
-        for (tag in listOf("</message>", "</presence>", "</iq>", "</stream:stream>")) {
-            val idx = text.indexOf(tag)
-            if (idx != -1) {
-                val end        = idx + tag.length
-                val stanzaText = text.substring(0, end).trim()
+        for (closeTag in listOf("</message>", "</presence>", "</iq>", "</stream:stream>")) {
+            val closeIdx = text.indexOf(closeTag)
+            if (closeIdx != -1) {
+                val openTag = closeTag.replace("/", "").replace(">", "")
+                val openIdx = text.lastIndexOf(openTag, closeIdx).takeIf { it != -1 } ?: 0
+                val end = closeIdx + closeTag.length
+                val stanzaText = text.substring(openIdx, end).trim()
                 if (stanzaText.isNotEmpty()) {
                     debugLog("STANZA [${conn.nick}]: $stanzaText")
                     handleStanza(conn, stanzaText)
@@ -278,12 +318,14 @@ class BarevService : Service() {
             }
         }
 
-        for (tag in listOf("<presence/>", "<presence type=\"unavailable\"/>")) {
-            val idx = text.indexOf(tag)
-            if (idx != -1) {
-                val end = idx + tag.length
-                debugLog("STANZA [${conn.nick}]: $tag")
-                handleStanza(conn, tag)
+        if (text.contains("<presence") && !text.contains("</presence>")) {
+            val presIdx = text.indexOf("<presence")
+            val gtIdx   = text.indexOf(">", presIdx)
+            if (gtIdx != -1 && text[gtIdx - 1] == '/') {
+                val end        = gtIdx + 1
+                val stanzaText = text.substring(presIdx, end).trim()
+                debugLog("STANZA [${conn.nick}]: $stanzaText")
+                handleStanza(conn, stanzaText)
                 sb.delete(0, end)
                 if (sb.isNotBlank()) processBuffer(conn, sb)
                 return
@@ -305,6 +347,7 @@ class BarevService : Service() {
 
     private fun handleStanza(conn: BuddyConnection, raw: String) {
         debugLog("STANZA [${conn.nick}]: $raw")
+        val key = "${conn.nick}@${conn.ipv6}"
 
         val wasTyping = conn.isTyping
         when {
@@ -312,7 +355,7 @@ class BarevService : Service() {
             raw.contains("<paused")   || raw.contains("<active")  -> conn.isTyping = false
             raw.contains("<body>")                                 -> conn.isTyping = false
         }
-        if (conn.isTyping != wasTyping) listener?.onTypingChanged(conn.nick)
+        if (conn.isTyping != wasTyping) listener?.onTypingChanged(key)
 
         when (val stanza = BarevProtocol.parseStanza(raw)) {
 
@@ -320,39 +363,45 @@ class BarevService : Service() {
                 if (!conn.isInitiator) sendStreamStart(conn)
                 conn.streamEstablished = true
                 sendPresenceNow(conn)
-                addSystemMessage(conn.nick, "Connected to ${stanza.from}")
-                listener?.onConnectionStateChanged(conn.nick)
-                listener?.onStatusChanged(conn.nick)
+                addSystemMessage(key, "Connected to ${stanza.from}")
+                listener?.onConnectionStateChanged(key)
+                listener?.onStatusChanged(key)
             }
 
             is ParsedStanza.StreamEnd -> {
-                addSystemMessage(conn.nick, "Peer closed the stream")
+                addSystemMessage(key, "Peer closed the stream")
                 cleanupConn(conn)
             }
 
             is ParsedStanza.PresenceUpdate -> {
-                conn.status = stanza.status
-                val label = when (stanza.status) {
-                    PresenceStatus.AVAILABLE -> "online"
-                    PresenceStatus.AWAY      -> "away"
-                    PresenceStatus.DND       -> "do not disturb"
-                    else                     -> "online"
+                val hasShowTag = raw.contains("<show>") || raw.contains("<show ")
+                if (stanza.status == PresenceStatus.AVAILABLE && !hasShowTag && conn.status != PresenceStatus.OFFLINE) {
+                    debugLog("Ignoring bare presence keepalive from ${conn.nick}, current status: ${conn.status}")
+                } else {
+                    conn.status = stanza.status
+                    val label = when (stanza.status) {
+                        PresenceStatus.AVAILABLE -> "online"
+                        PresenceStatus.AWAY      -> "away"
+                        PresenceStatus.DND       -> "do not disturb"
+                        else                     -> "online"
+                    }
+                    val suffix = if (stanza.statusText.isNotEmpty()) " – ${stanza.statusText}" else ""
+                    addSystemMessage(key, "Peer is $label$suffix")
+                    listener?.onStatusChanged(key)
                 }
-                val suffix = if (stanza.statusText.isNotEmpty()) " – ${stanza.statusText}" else ""
-                addSystemMessage(conn.nick, "Peer is $label$suffix")
-                listener?.onStatusChanged(conn.nick)
             }
 
             is ParsedStanza.PresenceOffline -> {
                 conn.status = PresenceStatus.OFFLINE
-                addSystemMessage(conn.nick, "Peer went offline")
-                listener?.onStatusChanged(conn.nick)
+                addSystemMessage(key, "Peer went offline")
+                listener?.onStatusChanged(key)
             }
 
             is ParsedStanza.Message -> {
                 val sender = if (stanza.from.isNotEmpty()) stanza.from.substringBefore("@") else conn.nick
                 conn.messages.add(ChatMessage(timestamp(), sender, stanza.body))
-                listener?.onMessageReceived(conn.nick)
+                saveMessages(conn)
+                listener?.onMessageReceived(key)
             }
 
             is ParsedStanza.Ping -> {
@@ -364,7 +413,7 @@ class BarevService : Service() {
                 conn.lastActivityTime = System.currentTimeMillis()
 
             is ParsedStanza.FileOffer ->
-                addSystemMessage(conn.nick, "${stanza.from.substringBefore("@")} wants to send: ${stanza.fileName} (${stanza.fileSize} bytes)")
+                addSystemMessage(key, "${stanza.from.substringBefore("@")} wants to send: ${stanza.fileName} (${stanza.fileSize} bytes)")
 
             else -> debugLog("Unhandled [${conn.nick}]: $raw")
         }
@@ -376,6 +425,7 @@ class BarevService : Service() {
         sendRaw(conn, BarevProtocol.makeChatMessage(conn.peerId, body))
         val myNick = localId.substringBefore("@")
         conn.messages.add(ChatMessage(timestamp(), myNick, body))
+        saveMessages(conn)
         listener?.onMessageReceived(nick)
     }
 
@@ -386,13 +436,15 @@ class BarevService : Service() {
     }
 
     fun sendPresenceToAll(status: PresenceStatus) {
+        currentStatus = status
+        saveStatus(status)
         connections.values.filter { it.streamEstablished }.forEach {
             sendRaw(it, BarevProtocol.makePresence(status, ""))
         }
     }
 
     private fun sendPresenceNow(conn: BuddyConnection) {
-        sendRaw(conn, BarevProtocol.makePresence(PresenceStatus.AVAILABLE, ""))
+        sendRaw(conn, BarevProtocol.makePresence(currentStatus, ""))
     }
 
     private fun sendStreamStart(conn: BuddyConnection) {
@@ -414,18 +466,23 @@ class BarevService : Service() {
     }
 
     fun addBuddy(contact: Contact) {
-        if (!connections.containsKey(contact.nick)) {
-            connections[contact.nick] = BuddyConnection(
-                nick = contact.nick,
-                ipv6 = contact.ipv6,
-                port = contact.port
+        val key = "${contact.nick}@${contact.ipv6}"
+        if (!connections.containsKey(key)) {
+            val messages = appContext?.let { MessageStore.load(it, key) } ?: mutableListOf()
+            connections[key] = BuddyConnection(
+                nick     = contact.nick,
+                ipv6     = contact.ipv6,
+                port     = contact.port,
+                messages = messages
             )
+            connectToBuddy(key)
         }
     }
 
     fun removeBuddy(nick: String) {
         disconnectBuddy(nick)
         connections.remove(nick)
+        appContext?.let { MessageStore.clear(it, nick) }
     }
 
     private fun addSystemMessage(nick: String, text: String) {
@@ -433,6 +490,11 @@ class BarevService : Service() {
             ChatMessage(timestamp(), "", text, isSystem = true)
         )
         listener?.onMessageReceived(nick)
+    }
+
+    private fun saveMessages(conn: BuddyConnection) {
+        val key = "${conn.nick}@${conn.ipv6}"
+        appContext?.let { MessageStore.save(it, key, conn.messages) }
     }
 
     private fun debugLog(msg: String) { Log.d("BarevService", msg) }

@@ -27,7 +27,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     private lateinit var statusSpinner:  Spinner
     private lateinit var peerStatusDot:  ImageView
     private lateinit var chatTitleBar:   TextView
-    private lateinit var connectButton:  Button
     private lateinit var noChatSelected: TextView
     private lateinit var typingIndicator: TextView
     private lateinit var buddyPanel:     LinearLayout
@@ -61,6 +60,12 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
             service?.localId  = account.jid
             contacts.forEach { service?.addBuddy(it) }
             service?.startListening(account.port)
+            lastSpinnerPosition = when (service?.currentStatus) {
+                PresenceStatus.AWAY -> 1
+                PresenceStatus.DND  -> 2
+                else                -> 0
+            }
+            statusSpinner.setSelection(lastSpinnerPosition)
             refreshBuddyList()
         }
         override fun onServiceDisconnected(name: ComponentName) {
@@ -83,7 +88,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         statusSpinner  = findViewById(R.id.statusSpinner)
         peerStatusDot  = findViewById(R.id.peerStatusDot)
         chatTitleBar   = findViewById(R.id.chatTitleBar)
-        connectButton  = findViewById(R.id.connectButton)
         noChatSelected = findViewById(R.id.noChatSelected)
         typingIndicator = findViewById(R.id.typingIndicator)
         buddyPanel      = findViewById(R.id.buddyPanel)
@@ -99,7 +103,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         accountButton.setOnClickListener { showAccountDialog() }
         addButton.setOnClickListener     { showAddBuddyDialog() }
         sendButton.setOnClickListener    { sendMessage() }
-        connectButton.setOnClickListener { toggleConnection() }
         togglePanelButton.setOnClickListener { toggleBuddyPanel() }
 
         showNoChatSelected()
@@ -159,7 +162,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         buddyAdapter = BuddyAdapter()
         buddyListView.adapter = buddyAdapter
         buddyListView.setOnItemClickListener { _, _, position, _ ->
-            selectBuddy(contacts[position].nick)
+            selectBuddy(contacts[position].key)
         }
         buddyListView.setOnItemLongClickListener { _, _, position, _ ->
             val contact = contacts[position]
@@ -167,9 +170,9 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
                 .setTitle("Remove buddy")
                 .setMessage("Remove ${contact.nick}?")
                 .setPositiveButton("Remove") { _, _ ->
-                    service?.removeBuddy(contact.nick)
-                    contacts = ContactManager.remove(this, contact.nick)
-                    if (selectedNick == contact.nick) showNoChatSelected()
+                    service?.removeBuddy(contact.key)
+                    contacts = ContactManager.remove(this, contact.key)
+                    if (selectedNick == contact.key) showNoChatSelected()
                     refreshBuddyList()
                 }
                 .setNegativeButton("Cancel", null)
@@ -186,17 +189,17 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
             Pair(R.drawable.status_dnd,       "Do Not Disturb")
         )
         val adapter = object : ArrayAdapter<Pair<Int, String>>(
-            this, R.layout.spinner_status_item, items
+            this, R.layout.spinner_status_selected, items
         ) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
-                makeView(position, convertView, parent)
-            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
-                makeView(position, convertView, parent)
-            private fun makeView(position: Int, convertView: View?, parent: ViewGroup): View {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = convertView ?: layoutInflater.inflate(R.layout.spinner_status_selected, parent, false)
+                view.findViewById<ImageView>(R.id.statusDot).setImageResource(items[position].first)
+                return view
+            }
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val view = convertView ?: layoutInflater.inflate(R.layout.spinner_status_item, parent, false)
-                val item = items[position]
-                view.findViewById<ImageView>(R.id.statusDot).setImageResource(item.first)
-                view.findViewById<TextView>(R.id.statusLabel).text = item.second
+                view.findViewById<ImageView>(R.id.statusDot).setImageResource(items[position].first)
+                view.findViewById<TextView>(R.id.statusLabel).text = items[position].second
                 return view
             }
         }
@@ -205,33 +208,42 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (position != lastSpinnerPosition) {
                     lastSpinnerPosition = position
+                    val status = when (position) {
+                        1    -> PresenceStatus.AWAY
+                        2    -> PresenceStatus.DND
+                        else -> PresenceStatus.AVAILABLE
+                    }
                     uiHandler.removeCallbacks(presenceSendRunnable)
-                    uiHandler.postDelayed(presenceSendRunnable, 3000)
+                    val anyConnected = service?.connections?.values?.any { it.streamEstablished } == true
+                    if (anyConnected) {
+                        service?.sendPresenceToAll(status)
+                    } else {
+                        uiHandler.postDelayed(presenceSendRunnable, 3000)
+                    }
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
-    private fun selectBuddy(nick: String) {
-        selectedNick = nick
+    private fun selectBuddy(key: String) {
+        selectedNick = key
         uiHandler.removeCallbacks(typingTimeoutRunnable)
-        val conn = service?.connections?.get(nick)
 
-        chatTitleBar.text = nick
+        val contact = contacts.firstOrNull { it.key == key }
+        chatTitleBar.text = contact?.nick ?: key
         noChatSelected.visibility = View.GONE
         findViewById<View>(R.id.chatHeader).visibility = View.VISIBLE
         chatView.visibility      = View.VISIBLE
         scrollView.visibility    = View.VISIBLE
         messageInput.visibility  = View.VISIBLE
         sendButton.visibility    = View.VISIBLE
-        connectButton.visibility = View.VISIBLE
         statusSpinner.visibility = View.VISIBLE
         peerStatusDot.visibility = View.VISIBLE
 
+        val conn = service?.connections?.get(key)
         updatePeerStatusDot(conn?.status ?: PresenceStatus.OFFLINE)
-        updateConnectButton(conn?.isConnected == true)
-        refreshChatView(nick)
+        refreshChatView(key)
         buddyAdapter.notifyDataSetChanged()
     }
 
@@ -241,7 +253,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         chatView.visibility        = View.GONE
         messageInput.visibility    = View.GONE
         sendButton.visibility      = View.GONE
-        connectButton.visibility   = View.GONE
         statusSpinner.visibility   = View.GONE
         peerStatusDot.visibility   = View.GONE
         typingIndicator.visibility = View.GONE
@@ -256,11 +267,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         )
     }
 
-    private fun toggleConnection() {
-        val nick = selectedNick ?: return
-        service?.connectToBuddy(nick)
-    }
-
     private fun sendMessage() {
         val nick = selectedNick ?: return
         val msg  = messageInput.text.toString().trim()
@@ -270,12 +276,12 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     }
 
     private val senderColors = listOf(
-        0xFF1565C0.toInt(),
-        0xFF6A1B9A.toInt(),
-        0xFF00695C.toInt(),
-        0xFF558B2F.toInt(),
-        0xFFE65100.toInt(),
-        0xFF283593.toInt()
+        0xFF00E5FF.toInt(),
+        0xFF64FFDA.toInt(),
+        0xFF18FFFF.toInt(),
+        0xFF40C4FF.toInt(),
+        0xFF69FFEF.toInt(),
+        0xFFB2EBF2.toInt()
     )
     private val nickColorMap = mutableMapOf<String, Int>()
     private var colorIndex = 0
@@ -314,7 +320,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
             val timeSpan = android.text.SpannableString(m.timestamp)
             timeSpan.setSpan(
-                android.text.style.ForegroundColorSpan(0xFF888888.toInt()),
+                android.text.style.ForegroundColorSpan(0xFF6B8299.toInt()),
                 0, timeSpan.length,
                 android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
             )
@@ -329,7 +335,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
             val bodySpan = android.text.SpannableString(m.body)
             bodySpan.setSpan(
-                android.text.style.ForegroundColorSpan(0xFF000000.toInt()),
+                android.text.style.ForegroundColorSpan(0xFFC8D6E5.toInt()),
                 0, bodySpan.length,
                 android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
             )
@@ -353,7 +359,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
     private fun updateConnectButton(connected: Boolean) {
         runOnUiThread {
-            connectButton.visibility = if (connected) View.GONE else View.VISIBLE
         }
     }
 
@@ -372,8 +377,9 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
                 val i = ipv6.text.toString().trim()
                 val p = port.text.toString().trim().toIntOrNull() ?: 1337
                 if (n.isNotEmpty() && i.isNotEmpty()) {
+                    val contact = Contact(n, i, p)
                     contacts = ContactManager.add(this, n, i, p)
-                    service?.addBuddy(Contact(n, i, p))
+                    service?.addBuddy(contact)
                     refreshBuddyList()
                 } else {
                     Toast.makeText(this, "Nick and IPv6 are required", Toast.LENGTH_SHORT).show()
@@ -425,8 +431,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     }
 
     override fun onConnectionStateChanged(nick: String) {
-        val conn = service?.connections?.get(nick)
-        if (nick == selectedNick) updateConnectButton(conn?.isConnected == true)
         refreshBuddyList()
     }
 
@@ -438,12 +442,12 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view    = convertView ?: layoutInflater.inflate(R.layout.buddy_list_item, parent, false)
             val contact = contacts[position]
-            val conn    = service?.connections?.get(contact.nick)
+            val conn    = service?.connections?.get(contact.key)
             view.findViewById<TextView>(R.id.buddyNick).text = contact.nick
             view.findViewById<ImageView>(R.id.buddyStatusDot)
                 .setImageResource(statusDrawable(conn?.status ?: PresenceStatus.OFFLINE))
             view.setBackgroundColor(
-                if (contact.nick == selectedNick) 0x220000FF else 0x00000000
+                if (contact.key == selectedNick) 0xFF0D2135.toInt() else 0xFF0A0E14.toInt()
             )
             return view
         }

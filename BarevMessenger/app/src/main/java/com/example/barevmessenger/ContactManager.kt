@@ -4,7 +4,9 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Contact(val nick: String, val ipv6: String, val port: Int = 1337)
+data class Contact(val nick: String, val ipv6: String, val port: Int = 1337) {
+    val key get() = "$nick@$ipv6"
+}
 
 object ContactManager {
 
@@ -44,15 +46,17 @@ object ContactManager {
 
     fun add(context: Context, nick: String, ipv6: String, port: Int = 1337): MutableList<Contact> {
         val contacts = load(context)
-        contacts.removeAll { it.nick == nick }
-        contacts.add(Contact(nick, ipv6, port))
-        save(context, contacts)
+        val newContact = Contact(nick, ipv6, port)
+        if (contacts.none { it.key == newContact.key }) {
+            contacts.add(newContact)
+            save(context, contacts)
+        }
         return contacts
     }
 
-    fun remove(context: Context, nick: String): MutableList<Contact> {
+    fun remove(context: Context, key: String): MutableList<Contact> {
         val contacts = load(context)
-        contacts.removeAll { it.nick == nick }
+        contacts.removeAll { it.key == key }
         save(context, contacts)
         return contacts
     }

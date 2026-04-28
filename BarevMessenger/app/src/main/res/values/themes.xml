@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.BarevMessenger" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
+    <style name="Theme.BarevMessenger" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/mgs_background</item>
+        <item name="android:colorBackground">@color/mgs_background</item>
+        <item name="colorPrimary">@color/mgs_cyan</item>
+        <item name="colorPrimaryDark">@color/mgs_cyan_dim</item>
+        <item name="colorAccent">@color/mgs_cyan</item>
+        <item name="android:textColorPrimary">@color/mgs_text_primary</item>
+        <item name="android:textColorSecondary">@color/mgs_text_secondary</item>
+        <item name="android:textColorHint">@color/mgs_text_secondary</item>
+        <item name="android:editTextColor">@color/mgs_text_primary</item>
+        <item name="android:listDivider">@color/mgs_divider</item>
+        <item name="android:colorControlNormal">@color/mgs_cyan</item>
+        <item name="android:colorControlActivated">@color/mgs_cyan</item>
+        <item name="android:buttonStyle">@style/MGS.Button</item>
+        <item name="android:spinnerStyle">@style/MGS.Spinner</item>
+    </style>
+
+    <style name="MGS.Button" parent="Widget.AppCompat.Button">
+        <item name="android:textColor">@color/mgs_cyan</item>
+        <item name="android:background">@color/mgs_surface_raised</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="MGS.Spinner" parent="Widget.AppCompat.Spinner">
+        <item name="android:background">@color/mgs_surface_raised</item>
+        <item name="android:popupBackground">@color/mgs_surface</item>
     </style>
 </resources>
