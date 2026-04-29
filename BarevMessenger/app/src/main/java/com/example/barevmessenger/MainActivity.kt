@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
@@ -17,22 +19,21 @@ import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
-    private lateinit var buddyListView:  ListView
-    private lateinit var accountButton:  Button
-    private lateinit var addButton:      Button
-    private lateinit var connectButton:  Button
-    private lateinit var chatView:       TextView
-    private lateinit var messageInput:   EditText
-    private lateinit var sendButton:     Button
-    private lateinit var scrollView:     ScrollView
-    private lateinit var statusSpinner:  Spinner
-    private lateinit var peerStatusDot:  ImageView
-    private lateinit var chatTitleBar:   TextView
-    private lateinit var noChatSelected: TextView
-    private lateinit var typingIndicator: TextView
-    private lateinit var buddyPanel:     LinearLayout
+    private lateinit var buddyListView:     ListView
+    private lateinit var accountButton:     Button
+    private lateinit var addButton:         Button
+    private lateinit var connectButton:     Button
+    private lateinit var chatView:          TextView
+    private lateinit var messageInput:      EditText
+    private lateinit var sendButton:        Button
+    private lateinit var scrollView:        ScrollView
+    private lateinit var statusSpinner:     Spinner
+    private lateinit var peerStatusDot:     ImageView
+    private lateinit var chatTitleBar:      TextView
+    private lateinit var typingIndicator:   TextView
+    private lateinit var noChatSelected:    TextView
+    private lateinit var buddyPanel:        LinearLayout
     private lateinit var togglePanelButton: ImageButton
-    private var isPanelVisible = true
 
     private var service: BarevService? = null
     private var isBound = false
@@ -40,9 +41,26 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     private var contacts: MutableList<Contact> = mutableListOf()
     private lateinit var buddyAdapter: BuddyAdapter
     private var account: Account = Account("", "")
+    private var isPanelVisible = true
 
     private val uiHandler = Handler(Looper.getMainLooper())
     private var lastSpinnerPosition = 0
+    private var isComposingSent = false
+    private val typingPauseMs = 2_000L
+
+    private val pausedRunnable = Runnable {
+        val nick = selectedNick ?: return@Runnable
+        if (isComposingSent) {
+            service?.sendPaused(nick)
+            isComposingSent = false
+        }
+    }
+
+    private val typingTimeoutRunnable = Runnable {
+        val nick = selectedNick ?: return@Runnable
+        service?.connections?.get(nick)?.isTyping = false
+        runOnUiThread { typingIndicator.visibility = View.GONE }
+    }
 
     private val presenceSendRunnable = Runnable {
         val status = when (statusSpinner.selectedItemPosition) {
@@ -83,16 +101,16 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         accountButton     = findViewById(R.id.accountButton)
         addButton         = findViewById(R.id.addButton)
         connectButton     = findViewById(R.id.connectButton)
-        chatView       = findViewById(R.id.chatView)
-        messageInput   = findViewById(R.id.messageInput)
-        sendButton     = findViewById(R.id.sendButton)
-        scrollView     = findViewById(R.id.scrollView)
-        statusSpinner  = findViewById(R.id.statusSpinner)
-        peerStatusDot  = findViewById(R.id.peerStatusDot)
-        chatTitleBar   = findViewById(R.id.chatTitleBar)
-        noChatSelected = findViewById(R.id.noChatSelected)
-        typingIndicator = findViewById(R.id.typingIndicator)
-        buddyPanel      = findViewById(R.id.buddyPanel)
+        chatView          = findViewById(R.id.chatView)
+        messageInput      = findViewById(R.id.messageInput)
+        sendButton        = findViewById(R.id.sendButton)
+        scrollView        = findViewById(R.id.scrollView)
+        statusSpinner     = findViewById(R.id.statusSpinner)
+        peerStatusDot     = findViewById(R.id.peerStatusDot)
+        chatTitleBar      = findViewById(R.id.chatTitleBar)
+        typingIndicator   = findViewById(R.id.typingIndicator)
+        noChatSelected    = findViewById(R.id.noChatSelected)
+        buddyPanel        = findViewById(R.id.buddyPanel)
         togglePanelButton = findViewById(R.id.togglePanelButton)
 
         account  = AccountManager.load(this)
@@ -101,11 +119,12 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         updateAccountButton()
         setupBuddyAdapter()
         setupStatusSpinner()
+        setupTypingDetection()
 
-        accountButton.setOnClickListener    { showAccountDialog() }
-        addButton.setOnClickListener        { showAddBuddyDialog() }
-        sendButton.setOnClickListener       { sendMessage() }
-        connectButton.setOnClickListener    { connectSelected() }
+        accountButton.setOnClickListener     { showAccountDialog() }
+        addButton.setOnClickListener         { showAddBuddyDialog() }
+        sendButton.setOnClickListener        { sendMessage() }
+        connectButton.setOnClickListener     { connectSelected() }
         togglePanelButton.setOnClickListener { toggleBuddyPanel() }
 
         showNoChatSelected()
@@ -134,7 +153,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         val nick = view.findViewById<EditText>(R.id.inputNick)
         val ipv6 = view.findViewById<EditText>(R.id.inputIpv6)
         val port = view.findViewById<EditText>(R.id.inputPort)
-
         nick.setText(account.nick)
         ipv6.setText(account.ipv6)
         port.setText(account.port.toString())
@@ -159,6 +177,31 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun setupTypingDetection() {
+        messageInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val nick = selectedNick ?: return
+                val conn = service?.connections?.get(nick) ?: return
+                if (!conn.streamEstablished) return
+                uiHandler.removeCallbacks(pausedRunnable)
+                if (!s.isNullOrEmpty()) {
+                    if (!isComposingSent) {
+                        service?.sendComposing(nick)
+                        isComposingSent = true
+                    }
+                    uiHandler.postDelayed(pausedRunnable, typingPauseMs)
+                } else {
+                    if (isComposingSent) {
+                        service?.sendPaused(nick)
+                        isComposingSent = false
+                    }
+                }
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
     }
 
     private fun setupBuddyAdapter() {
@@ -218,11 +261,8 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
                     }
                     uiHandler.removeCallbacks(presenceSendRunnable)
                     val anyConnected = service?.connections?.values?.any { it.streamEstablished } == true
-                    if (anyConnected) {
-                        service?.sendPresenceToAll(status)
-                    } else {
-                        uiHandler.postDelayed(presenceSendRunnable, 3000)
-                    }
+                    if (anyConnected) service?.sendPresenceToAll(status)
+                    else uiHandler.postDelayed(presenceSendRunnable, 3000)
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -231,10 +271,13 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
     private fun selectBuddy(key: String) {
         selectedNick = key
+        isComposingSent = false
         uiHandler.removeCallbacks(typingTimeoutRunnable)
+        uiHandler.removeCallbacks(pausedRunnable)
 
         val contact = contacts.firstOrNull { it.key == key }
         chatTitleBar.text = contact?.nick ?: key
+
         noChatSelected.visibility = View.GONE
         findViewById<View>(R.id.chatHeader).visibility = View.VISIBLE
         chatView.visibility      = View.VISIBLE
@@ -243,6 +286,8 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         sendButton.visibility    = View.VISIBLE
         statusSpinner.visibility = View.VISIBLE
         peerStatusDot.visibility = View.VISIBLE
+        typingIndicator.visibility = View.GONE
+
         val conn = service?.connections?.get(key)
         updatePeerStatusDot(conn?.status ?: PresenceStatus.OFFLINE)
         updateConnectButton(conn?.isConnected == true)
@@ -256,6 +301,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         chatView.visibility        = View.GONE
         messageInput.visibility    = View.GONE
         sendButton.visibility      = View.GONE
+        connectButton.visibility   = View.GONE
         statusSpinner.visibility   = View.GONE
         peerStatusDot.visibility   = View.GONE
         typingIndicator.visibility = View.GONE
@@ -270,12 +316,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         )
     }
 
-    private fun updateConnectButton(connected: Boolean) {
-        runOnUiThread {
-            connectButton.visibility = if (connected) View.GONE else View.VISIBLE
-        }
-    }
-
     private fun connectSelected() {
         val key = selectedNick ?: return
         service?.connectToBuddy(key)
@@ -286,82 +326,48 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         val msg  = messageInput.text.toString().trim()
         if (msg.isEmpty()) return
         service?.sendMessage(nick, msg)
-        messageInput.setText("")
-    }
-
-    private val senderColors = listOf(
-        0xFF00E5FF.toInt(),
-        0xFF64FFDA.toInt(),
-        0xFF18FFFF.toInt(),
-        0xFF40C4FF.toInt(),
-        0xFF69FFEF.toInt(),
-        0xFFB2EBF2.toInt()
-    )
-    private val nickColorMap = mutableMapOf<String, Int>()
-    private var colorIndex = 0
-
-    private fun colorForNick(nick: String): Int {
-        return nickColorMap.getOrPut(nick) {
-            senderColors[colorIndex++ % senderColors.size]
+        if (isComposingSent) {
+            service?.sendPaused(nick)
+            isComposingSent = false
         }
+        messageInput.setText("")
     }
 
     private fun refreshChatView(nick: String) {
         val messages = service?.connections?.get(nick)?.messages ?: return
         val sb = android.text.SpannableStringBuilder()
-
         for (m in messages) {
             if (m.isSystem) continue
-
             val senderColor = colorForNick(m.sender)
-            val lineStart = sb.length
-
             val senderSpan = android.text.SpannableString(m.sender)
-            senderSpan.setSpan(
-                android.text.style.ForegroundColorSpan(senderColor),
-                0, senderSpan.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            senderSpan.setSpan(
-                android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
-                0, senderSpan.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
+            senderSpan.setSpan(android.text.style.ForegroundColorSpan(senderColor), 0, senderSpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            senderSpan.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, senderSpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.append(senderSpan)
-
-            val spaces = "    "
-            sb.append(spaces)
-
+            sb.append("    ")
             val timeSpan = android.text.SpannableString(m.timestamp)
-            timeSpan.setSpan(
-                android.text.style.ForegroundColorSpan(0xFF6B8299.toInt()),
-                0, timeSpan.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            timeSpan.setSpan(
-                android.text.style.RelativeSizeSpan(0.85f),
-                0, timeSpan.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
+            timeSpan.setSpan(android.text.style.ForegroundColorSpan(0xFF6B8299.toInt()), 0, timeSpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            timeSpan.setSpan(android.text.style.RelativeSizeSpan(0.85f), 0, timeSpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.append(timeSpan)
-
             sb.append("\n")
-
             val bodySpan = android.text.SpannableString(m.body)
-            bodySpan.setSpan(
-                android.text.style.ForegroundColorSpan(0xFFC8D6E5.toInt()),
-                0, bodySpan.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
+            bodySpan.setSpan(android.text.style.ForegroundColorSpan(0xFFC8D6E5.toInt()), 0, bodySpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.append(bodySpan)
             sb.append("\n\n")
         }
-
         runOnUiThread {
             chatView.text = sb
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
     }
+
+    private val senderColors = listOf(
+        0xFF00E5FF.toInt(), 0xFF64FFDA.toInt(), 0xFF18FFFF.toInt(),
+        0xFF40C4FF.toInt(), 0xFF69FFEF.toInt(), 0xFFB2EBF2.toInt()
+    )
+    private val nickColorMap = mutableMapOf<String, Int>()
+    private var colorIndex = 0
+    private fun colorForNick(nick: String): Int =
+        nickColorMap.getOrPut(nick) { senderColors[colorIndex++ % senderColors.size] }
 
     private fun refreshBuddyList() {
         runOnUiThread { buddyAdapter.notifyDataSetChanged() }
@@ -369,6 +375,12 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
 
     private fun updatePeerStatusDot(status: PresenceStatus) {
         runOnUiThread { peerStatusDot.setImageResource(statusDrawable(status)) }
+    }
+
+    private fun updateConnectButton(connected: Boolean) {
+        runOnUiThread {
+            connectButton.visibility = if (connected) View.GONE else View.VISIBLE
+        }
     }
 
     private fun showAddBuddyDialog() {
@@ -403,12 +415,6 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
         PresenceStatus.AWAY      -> R.drawable.status_away
         PresenceStatus.DND       -> R.drawable.status_dnd
         PresenceStatus.OFFLINE   -> R.drawable.status_offline
-    }
-
-    private val typingTimeoutRunnable = Runnable {
-        val nick = selectedNick ?: return@Runnable
-        service?.connections?.get(nick)?.isTyping = false
-        runOnUiThread { typingIndicator.visibility = View.GONE }
     }
 
     override fun onTypingChanged(nick: String) {

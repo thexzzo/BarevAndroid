@@ -16,11 +16,11 @@ object BarevProtocol {
         status: PresenceStatus = PresenceStatus.AVAILABLE,
         statusText: String = ""
     ): String = when (status) {
-        PresenceStatus.OFFLINE -> "<presence type=\"unavailable\"/>"
+        PresenceStatus.OFFLINE -> "<presence type=\"unavailable\"></presence>"
         PresenceStatus.AVAILABLE -> {
             if (statusText.isNotEmpty())
                 "<presence><status>${escape(statusText)}</status></presence>"
-            else "<presence/>"
+            else "<presence><status>available</status></presence>"
         }
         else -> {
             val showVal = when (status) {
@@ -110,7 +110,7 @@ object BarevProtocol {
             t.contains("</stream:stream>") ->
                 ParsedStanza.StreamEnd
 
-            t.startsWith("<presence") && t.contains("type=\"unavailable\"") ->
+            t.startsWith("<presence") && (t.contains("type=\"unavailable\"") || t.contains("type='unavailable'")) ->
                 ParsedStanza.PresenceOffline
 
             t.startsWith("<presence") -> {

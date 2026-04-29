@@ -362,9 +362,9 @@ class BarevService : Service() {
             }
 
             is ParsedStanza.PresenceUpdate -> {
-                val hasShowTag = raw.contains("<show>") || raw.contains("<show ")
-                if (stanza.status == PresenceStatus.AVAILABLE && !hasShowTag && conn.status != PresenceStatus.OFFLINE) {
-                    debugLog("Ignoring bare presence keepalive from ${conn.nick}, current status: ${conn.status}")
+                val hasContent = raw.contains("<show>") || raw.contains("<status>") || raw.contains("<x ")
+                if (stanza.status == PresenceStatus.AVAILABLE && !hasContent && conn.status != PresenceStatus.OFFLINE) {
+                    debugLog("Ignoring bare presence keepalive from ${conn.nick}")
                 } else {
                     conn.status = stanza.status
                     val label = when (stanza.status) {
@@ -405,6 +405,18 @@ class BarevService : Service() {
 
             else -> debugLog("Unhandled [${conn.nick}]: $raw")
         }
+    }
+
+    fun sendComposing(key: String) {
+        val conn = connections[key] ?: return
+        if (!conn.streamEstablished) return
+        sendRaw(conn, BarevProtocol.makeComposing(localId, conn.peerId))
+    }
+
+    fun sendPaused(key: String) {
+        val conn = connections[key] ?: return
+        if (!conn.streamEstablished) return
+        sendRaw(conn, BarevProtocol.makePaused(localId, conn.peerId))
     }
 
     fun sendMessage(nick: String, body: String) {
