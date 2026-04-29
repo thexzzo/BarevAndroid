@@ -28,3 +28,7 @@ forth patch:
 fifth patch:
 - Brought the 'Connect' button back for each chat in order to resolve the unstable connection
 
+sixth patch:
+- Resolved a bug where changing the status from away or dnd to available wouldn't update the status on the peer's app
+- Resolved a bug where typing indicator of the peer wouldn't appear next to their nick
+
