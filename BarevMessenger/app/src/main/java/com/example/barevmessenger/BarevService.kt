@@ -26,7 +26,8 @@ data class ChatMessage(
     val timestamp: String,
     val sender: String,
     val body: String,
-    val isSystem: Boolean = false
+    val isSystem: Boolean = false,
+    val dateKey: String = ""
 )
 
 data class BuddyConnection(
@@ -53,8 +54,10 @@ class BarevService : Service() {
         fun getService(): BarevService = this@BarevService
     }
 
-    private val binder     = BarevBinder()
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val binder      = BarevBinder()
+    private val timeFormat  = SimpleDateFormat("HH:mm",        Locale.getDefault())
+    private val dateFormat  = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
+    private val dateKeyFmt  = SimpleDateFormat("yyyyMMdd",     Locale.getDefault())
 
     val connections = ConcurrentHashMap<String, BuddyConnection>()
     var localId     = ""
@@ -119,6 +122,8 @@ class BarevService : Service() {
     }
 
     fun timestamp(): String = timeFormat.format(Date())
+    fun dateKey(): String   = dateKeyFmt.format(Date())
+    fun dateLabel(): String = dateFormat.format(Date())
 
     fun startListening(port: Int) {
         thread {
@@ -387,7 +392,7 @@ class BarevService : Service() {
 
             is ParsedStanza.Message -> {
                 val sender = if (stanza.from.isNotEmpty()) stanza.from.substringBefore("@") else conn.nick
-                conn.messages.add(ChatMessage(timestamp(), sender, stanza.body))
+                conn.messages.add(ChatMessage(timestamp(), sender, stanza.body, dateKey = dateKey()))
                 saveMessages(conn)
                 listener?.onMessageReceived(key)
             }
@@ -424,7 +429,7 @@ class BarevService : Service() {
         if (!conn.streamEstablished) return
         sendRaw(conn, BarevProtocol.makeChatMessage(conn.peerId, body))
         val myNick = localId.substringBefore("@")
-        conn.messages.add(ChatMessage(timestamp(), myNick, body))
+        conn.messages.add(ChatMessage(timestamp(), myNick, body, dateKey = dateKey()))
         saveMessages(conn)
         listener?.onMessageReceived(nick)
     }

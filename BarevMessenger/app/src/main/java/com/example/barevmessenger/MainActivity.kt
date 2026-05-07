@@ -336,8 +336,36 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
     private fun refreshChatView(nick: String) {
         val messages = service?.connections?.get(nick)?.messages ?: return
         val sb = android.text.SpannableStringBuilder()
+        var lastDateKey = ""
+
         for (m in messages) {
             if (m.isSystem) continue
+
+            if (m.dateKey.isNotEmpty() && m.dateKey != lastDateKey) {
+                lastDateKey = m.dateKey
+                val dateLabel = try {
+                    val sdf = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+                    val outSdf = java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale.getDefault())
+                    outSdf.format(sdf.parse(m.dateKey)!!)
+                } catch (e: Exception) { m.dateKey }
+
+                if (sb.isNotEmpty()) sb.append("\n")
+                val sep = android.text.SpannableString("─── $dateLabel ───")
+                sep.setSpan(
+                    android.text.style.ForegroundColorSpan(0xFF6B8299.toInt()),
+                    0, sep.length,
+                    android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                sep.setSpan(
+                    android.text.style.RelativeSizeSpan(0.8f),
+                    0, sep.length,
+                    android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                val sepPara = android.text.SpannableString("\n")
+                sb.append(sep)
+                sb.append("\n\n")
+            }
+
             val senderColor = colorForNick(m.sender)
             val senderSpan = android.text.SpannableString(m.sender)
             senderSpan.setSpan(android.text.style.ForegroundColorSpan(senderColor), 0, senderSpan.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -354,6 +382,7 @@ class MainActivity : AppCompatActivity(), BarevService.ServiceListener {
             sb.append(bodySpan)
             sb.append("\n\n")
         }
+
         runOnUiThread {
             chatView.text = sb
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }

@@ -10,7 +10,7 @@
         android:id="@+id/inputNick"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Your nick (e.g. Reza)"
+        android:hint="Your nick"
         android:inputType="text" />
 
     <EditText

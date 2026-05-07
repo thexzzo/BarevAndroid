@@ -21,7 +21,8 @@ object MessageStore {
                 timestamp = obj.getString("timestamp"),
                 sender    = obj.getString("sender"),
                 body      = obj.getString("body"),
-                isSystem  = obj.optBoolean("isSystem", false)
+                isSystem  = obj.optBoolean("isSystem", false),
+                dateKey   = obj.optString("dateKey", "")
             ))
         }
         return list
@@ -36,6 +37,7 @@ object MessageStore {
             obj.put("sender",    m.sender)
             obj.put("body",      m.body)
             obj.put("isSystem",  m.isSystem)
+            obj.put("dateKey",   m.dateKey)
             array.put(obj)
         }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
