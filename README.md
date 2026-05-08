@@ -22,7 +22,6 @@ forth patch:
 - Issue of presence stanzas not being updated on the client accordingly resolved
 - Logo updated to a modified version of the original Barev Purple
 - Up to 200 chat logs are saved for each peer
-- .apk file available for download! (https://github.com/thexzzo/BarevAndroid/releases/download/v1.2/Barev.apk
 )
 
 fifth patch:
@@ -34,4 +33,5 @@ sixth patch:
 
 seventh patch:
 - messages are now viewed and stored based on the date they were sent or received
+- .apk file available for download! (https://github.com/thexzzo/BarevAndroid/releases/download/v1.3/Barev.apk
 
