@@ -22,7 +22,6 @@ forth patch:
 - Issue of presence stanzas not being updated on the client accordingly resolved
 - Logo updated to a modified version of the original Barev Purple
 - Up to 200 chat logs are saved for each peer
-)
 
 fifth patch:
 - Brought the 'Connect' button back for each chat in order to resolve the unstable connection
