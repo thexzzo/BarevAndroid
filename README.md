@@ -32,3 +32,6 @@ sixth patch:
 - Resolved a bug where changing the status from away or dnd to available wouldn't update the status on the peer's app
 - Resolved a bug where typing indicator of the peer wouldn't appear next to their nick
 
+seventh patch:
+- messages are now viewed and stored based on the date they were sent or received
+
