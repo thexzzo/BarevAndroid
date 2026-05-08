@@ -35,3 +35,7 @@ seventh patch:
 - messages are now viewed and stored based on the date they were sent or received
 - .apk file available for download! (https://github.com/thexzzo/BarevAndroid/releases/download/v1.3/Barev.apk
 
+
+
+Inspired by and developed based on barev purple (https://github.com/norayr/barev-purple) February 2026 - To be determined :)
+
